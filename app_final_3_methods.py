@@ -43,6 +43,7 @@ MAP_COUNT = 10
 DEFAULT_BEAM_WIDTH = 5
 DEFAULT_SAMPLING_SAMPLES = 50
 DEFAULT_TEMPERATURE = 0.8
+EPS_CAPACITY = 1e-6  # cho phép sai số số thực khi so sánh load <= Q
 
 CHECKPOINT_CANDIDATES = [
     "Bo_nao_AI_CVRP/ppo_attention_cvrp_best.ckpt",
@@ -387,15 +388,16 @@ def validate_routes_dataframe(routes, demands, capacity):
         starts_ends_depot = len(route) >= 2 and route[0] == 0 and route[-1] == 0
         customers = [int(node) for node in route if int(node) != 0]
         load = float(sum(float(demands[node]) for node in customers))
-        over_capacity = load > float(capacity) + 1e-9
+        over_capacity = load > float(capacity) + EPS_CAPACITY
         visited.extend(customers)
 
         route_rows.append(
             {
                 "ROUTE": f"Xe {idx}",
                 "PATH": " -> ".join(map(str, route)),
-                "LOAD": round(load, 4),
-                "CAPACITY_Q": round(float(capacity), 4),
+                "LOAD": round(load, 6),
+                "CAPACITY_Q": round(float(capacity), 6),
+                "OVER_BY": round(max(0.0, load - float(capacity)), 8),
                 "START_END_DEPOT": "OK" if starts_ends_depot else "Lỗi",
                 "CAPACITY_CHECK": "OK" if not over_capacity else "Vượt tải",
             }
