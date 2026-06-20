@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from typing import Any, cast
 
 import lightning.pytorch as pl
 import torch
@@ -87,7 +88,7 @@ class RL4COTrainer(Trainer):
 
         # Set matmul precision for faster inference https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
         if matmul_precision is not None:
-            torch.set_float32_matmul_precision(matmul_precision)
+            torch.set_float32_matmul_precision(cast(str, matmul_precision))
 
         # Check if gradient_clip_val is set to None
         if gradient_clip_val is None:
@@ -110,7 +111,7 @@ class RL4COTrainer(Trainer):
             strategy=strategy,
             gradient_clip_val=gradient_clip_val,
             devices=devices,
-            precision=precision,
+            precision=cast(Any, precision),
             reload_dataloaders_every_n_epochs=reload_dataloaders_every_n_epochs,
             **kwargs,
         )

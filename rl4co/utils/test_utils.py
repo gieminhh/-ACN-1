@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from torch.utils.data import DataLoader
 
 from rl4co.envs import (
@@ -60,13 +62,25 @@ def get_env(name, size):
 def generate_env_data(env, size, batch_size):
     env = get_env(env, size)
     dataset = env.dataset([batch_size])
+    if isinstance(dataset, dict):
+        dataset = next(iter(dataset.values()))
+    dataset = cast(Any, dataset)
+    collate_fn = getattr(dataset, "collate_fn", None)
 
-    dataloader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=0,
-        collate_fn=dataset.collate_fn,
-    )
+    if collate_fn is None:
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0,
+        )
+    else:
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0,
+            collate_fn=collate_fn,
+        )
 
     return env, next(iter(dataloader))

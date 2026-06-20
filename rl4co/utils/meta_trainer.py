@@ -1,6 +1,7 @@
 import copy
 import math
 import random
+from typing import Any, cast
 
 import lightning.pytorch as pl
 import torch
@@ -47,6 +48,8 @@ class ReptileCallback(Callback):
         self.sch_bar = sch_bar
         self.print_log = print_log
         self.data_type = data_type
+        self.selected_tasks: list[tuple[int, ...]] = []
+        self.task_params: tuple[int, ...] | None = None
         self.task_set = self._generate_task_set(data_type, min_size, max_size)
 
     def on_fit_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
@@ -54,14 +57,16 @@ class ReptileCallback(Callback):
         self._sample_task()
 
         # Pre-set the distribution
+        env = cast(Any, pl_module.env)
+        generator = env.generator
         if self.data_type == "size_distribution":
-            pl_module.env.generator.loc_distribution = "gaussian_mixture"
-            self.selected_tasks[0] = (pl_module.env.generator.num_loc, 0, 0)
+            generator.loc_distribution = "gaussian_mixture"
+            self.selected_tasks[0] = (generator.num_loc, 0, 0)
         elif self.data_type == "size":
-            pl_module.env.generator.loc_distribution = "uniform"
-            self.selected_tasks[0] = (pl_module.env.generator.num_loc,)
+            generator.loc_distribution = "uniform"
+            self.selected_tasks[0] = (generator.num_loc,)
         elif self.data_type == "distribution":
-            pl_module.env.generator.loc_distribution = "gaussian_mixture"
+            generator.loc_distribution = "gaussian_mixture"
             self.selected_tasks[0] = (0, 0)
         self.task_params = self.selected_tasks[0]
 
@@ -82,16 +87,21 @@ class ReptileCallback(Callback):
             pl_module.load_state_dict(self.meta_model_state_dict)
 
         # Reinitialize the optimizer every epoch
-        lr_decay = 0.1 if trainer.current_epoch + 1 == int(self.sch_bar * trainer.max_epochs) else 1
+        if trainer.max_epochs is None:
+            lr_decay = 1
+        else:
+            lr_decay = 0.1 if trainer.current_epoch + 1 == int(self.sch_bar * trainer.max_epochs) else 1
         old_lr = trainer.optimizers[0].param_groups[0]["lr"]
         new_optimizer = Adam(pl_module.parameters(), lr=old_lr * lr_decay)
         trainer.optimizers = [new_optimizer]
 
         # Print
         if self.print_log:
-            if hasattr(pl_module.env.generator, "capacity"):
+            env = cast(Any, pl_module.env)
+            generator = env.generator
+            if hasattr(generator, "capacity"):
                 print(
-                    f">> Training task: {self.task_params}, capacity: {pl_module.env.generator.capacity}"
+                    f">> Training task: {self.task_params}, capacity: {generator.capacity}"
                 )
             else:
                 print(f">> Training task: {self.task_params}")
@@ -140,27 +150,30 @@ class ReptileCallback(Callback):
         # Load new training task (Update the environment)
         self.task_params = self.selected_tasks[task_idx]
 
+        assert self.task_params is not None
+        env = cast(Any, pl_module.env)
+        generator = env.generator
+
         if self.data_type == "size_distribution":
             assert len(self.task_params) == 3
-            pl_module.env.generator.num_loc = self.task_params[0]
-            pl_module.env.generator.num_modes = self.task_params[1]
-            pl_module.env.generator.cdist = self.task_params[2]
+            generator.num_loc = self.task_params[0]
+            generator.num_modes = self.task_params[1]
+            generator.cdist = self.task_params[2]
         elif self.data_type == "distribution":  # fixed size
             assert len(self.task_params) == 2
-            pl_module.env.generator.num_modes = self.task_params[0]
-            pl_module.env.generator.cdist = self.task_params[1]
+            generator.num_modes = self.task_params[0]
+            generator.cdist = self.task_params[1]
         elif self.data_type == "size":  # fixed distribution
             assert len(self.task_params) == 1
-            pl_module.env.generator.num_loc = self.task_params[0]
+            generator.num_loc = self.task_params[0]
 
-        if hasattr(pl_module.env.generator, "capacity") and self.data_type in [
+        if hasattr(generator, "capacity") and self.data_type in [
             "size_distribution",
             "size",
         ]:
-            task_capacity = (
-                math.ceil(30 + self.task_params[0] / 5) if self.task_params[0] >= 20 else 20
-            )
-            pl_module.env.generator.capacity = task_capacity
+            num_loc = self.task_params[0]
+            task_capacity = math.ceil(30 + num_loc / 5) if num_loc >= 20 else 20
+            generator.capacity = task_capacity
 
     def _alpha_scheduler(self):
         self.alpha = max(self.alpha * self.alpha_decay, 0.0001)

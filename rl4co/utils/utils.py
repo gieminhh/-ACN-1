@@ -2,6 +2,7 @@ import importlib
 import platform
 import sys
 import warnings
+from typing import Any, cast
 
 from collections.abc import Callable
 from importlib.util import find_spec
@@ -13,7 +14,7 @@ from lightning.pytorch.loggers.logger import Logger
 
 # Import the necessary PyTorch Lightning component
 from lightning.pytorch.trainer.connectors.accelerator_connector import _AcceleratorConnector
-from lightning.pytorch.utilities.rank_zero import rank_zero_only
+from lightning.fabric.utilities.rank_zero import rank_zero_only
 from omegaconf import DictConfig, OmegaConf
 
 from rl4co.utils import pylogger, rich_utils
@@ -139,7 +140,7 @@ def log_hyperparameters(object_dict: dict) -> None:
 
     hparams = {}
 
-    cfg = OmegaConf.to_container(object_dict["cfg"])
+    cfg = cast(dict[str, Any], OmegaConf.to_container(object_dict["cfg"]))
     model = object_dict["model"]
     trainer = object_dict["trainer"]
 
@@ -176,7 +177,7 @@ def log_hyperparameters(object_dict: dict) -> None:
         logger.log_hyperparams(hparams)
 
 
-def get_metric_value(metric_dict: dict, metric_name: str) -> float:
+def get_metric_value(metric_dict: dict, metric_name: str) -> float | None:
     """Safely retrieves value of the metric logged in LightningModule."""
 
     if not metric_name:
@@ -275,9 +276,11 @@ def show_versions():
     # platform information
     print(f"{'Python'.rjust(longest_name)} : {sys.version.split()[0]}")
     print(f"{'Platform'.rjust(longest_name)} : {platform.platform()}")
+    connector = _AcceleratorConnector()
+    choose_auto_accelerator = cast(Any, connector._choose_auto_accelerator)
     try:
-        lightning_auto_device = _AcceleratorConnector()._choose_auto_accelerator(None)
-    except Exception:
-        lightning_auto_device = _AcceleratorConnector()._choose_auto_accelerator()
+        lightning_auto_device = choose_auto_accelerator(None)
+    except TypeError:
+        lightning_auto_device = choose_auto_accelerator()
     # lightning hardware accelerators
     print(f"{'Lightning device'.rjust(longest_name)} : {lightning_auto_device}")
