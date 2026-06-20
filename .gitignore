@@ -5,6 +5,7 @@
 *.npy
 *.pkl
 *.txt
+!requirements.txt
 
 # Logs
 /logs
@@ -12,6 +13,7 @@
 # checkpoints
 *saved_checkpoints*
 *.ckpt
+*.pt
 
 # CO-related file types
 *.tsp

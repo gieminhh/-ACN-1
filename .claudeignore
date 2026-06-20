@@ -1,0 +1,18 @@
+# Legacy RL4CO repository material kept only for reference.
+rl4co/
+configs/
+docs/
+examples/
+lightning_logs/
+logs/
+_report_assets/
+Bo_nao_AI_CVRP/
+figures/
+
+# Local/generated files.
+.git/
+.venv/
+__pycache__/
+*.ckpt
+*.pt
+*.pyc
