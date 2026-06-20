@@ -339,6 +339,93 @@ def run_all(env, model, beam_width, sampling_samples, temperature):
     return pd.DataFrame(rows), detail
 
 
+def map_dataset_dataframe(res):
+    """
+    Tạo bảng dữ liệu đầu vào của MAP đang chọn.
+    Bảng này giúp chứng minh MAP được giải trên đúng bộ dữ liệu gồm depot,
+    tọa độ khách hàng, demand và capacity.
+    """
+    coords = res["coords"]
+    demands = res["demands"]
+    capacity = res["capacity"]
+
+    rows = []
+    for node_id in range(len(coords)):
+        demand_value = 0.0
+        if node_id < len(demands):
+            demand_value = float(demands[node_id])
+
+        rows.append(
+            {
+                "MAP": res["map"],
+                "SEED": res["seed"],
+                "NODE": node_id,
+                "TYPE": "Depot" if node_id == 0 else "Customer",
+                "X": round(float(coords[node_id][0]), 4),
+                "Y": round(float(coords[node_id][1]), 4),
+                "DEMAND": round(demand_value, 4),
+                "CAPACITY_Q": round(float(capacity), 4),
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def validate_routes_dataframe(routes, demands, capacity):
+    """
+    Kiểm tra nghiệm CVRP có hợp lệ không:
+    - mỗi tuyến bắt đầu/kết thúc ở depot 0;
+    - mỗi khách hàng xuất hiện đúng 1 lần;
+    - tải từng tuyến không vượt capacity.
+    """
+    customer_count = len(demands) - 1
+    expected_customers = set(range(1, customer_count + 1))
+    visited = []
+    route_rows = []
+
+    for idx, route in enumerate(routes, start=1):
+        starts_ends_depot = len(route) >= 2 and route[0] == 0 and route[-1] == 0
+        customers = [int(node) for node in route if int(node) != 0]
+        load = float(sum(float(demands[node]) for node in customers))
+        over_capacity = load > float(capacity) + 1e-9
+        visited.extend(customers)
+
+        route_rows.append(
+            {
+                "ROUTE": f"Xe {idx}",
+                "PATH": " -> ".join(map(str, route)),
+                "LOAD": round(load, 4),
+                "CAPACITY_Q": round(float(capacity), 4),
+                "START_END_DEPOT": "OK" if starts_ends_depot else "Lỗi",
+                "CAPACITY_CHECK": "OK" if not over_capacity else "Vượt tải",
+            }
+        )
+
+    visited_set = set(visited)
+    duplicate_customers = sorted([node for node in visited_set if visited.count(node) > 1])
+    missing_customers = sorted(expected_customers - visited_set)
+    extra_customers = sorted(visited_set - expected_customers)
+
+    is_valid = (
+        all(row["START_END_DEPOT"] == "OK" for row in route_rows)
+        and all(row["CAPACITY_CHECK"] == "OK" for row in route_rows)
+        and not duplicate_customers
+        and not missing_customers
+        and not extra_customers
+    )
+
+    summary_rows = [
+        {"TIÊU CHÍ": "Mỗi tuyến bắt đầu/kết thúc tại depot", "KẾT QUẢ": "OK" if all(row["START_END_DEPOT"] == "OK" for row in route_rows) else "Lỗi"},
+        {"TIÊU CHÍ": "Không vượt tải trọng Q", "KẾT QUẢ": "OK" if all(row["CAPACITY_CHECK"] == "OK" for row in route_rows) else "Lỗi"},
+        {"TIÊU CHÍ": "Không lặp khách hàng", "KẾT QUẢ": "OK" if not duplicate_customers else str(duplicate_customers)},
+        {"TIÊU CHÍ": "Không thiếu khách hàng", "KẾT QUẢ": "OK" if not missing_customers else str(missing_customers)},
+        {"TIÊU CHÍ": "Không có node khách hàng ngoài phạm vi", "KẾT QUẢ": "OK" if not extra_customers else str(extra_customers)},
+        {"TIÊU CHÍ": "Kết luận nghiệm", "KẾT QUẢ": "Hợp lệ" if is_valid else "Chưa hợp lệ"},
+    ]
+
+    return pd.DataFrame(route_rows), pd.DataFrame(summary_rows), is_valid
+
+
 def plot_routes(coords, routes, title):
     fig = go.Figure()
 
@@ -480,6 +567,22 @@ with tab2:
     else:
         item = res["proposed"]
 
+    st.subheader(f"Dữ liệu đầu vào của {selected_map}")
+    st.caption(
+        "Bảng này là bộ dữ liệu CVRP được sinh ngẫu nhiên theo seed của MAP: "
+        "node 0 là depot, các node còn lại là khách hàng."
+    )
+    dataset_df = map_dataset_dataframe(res)
+    st.dataframe(dataset_df, use_container_width=True, height=320, hide_index=True)
+
+    csv_data = dataset_df.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        label=f"Tải dữ liệu {selected_map} (.csv)",
+        data=csv_data,
+        file_name=f"{selected_map}_dataset.csv",
+        mime="text/csv",
+    )
+
     st.plotly_chart(
         plot_routes(
             res["coords"],
@@ -492,6 +595,20 @@ with tab2:
     st.subheader("Thông tin route")
     st.write(f"Cost: {item['cost']:.4f}")
     st.write(f"Số xe: {item['vehicles']}")
+
+    route_df, check_df, is_valid = validate_routes_dataframe(
+        item["routes"],
+        res["demands"],
+        res["capacity"],
+    )
+
+    if is_valid:
+        st.success("Nghiệm hợp lệ: phục vụ đủ khách hàng, không lặp khách, không vượt tải.")
+    else:
+        st.error("Nghiệm chưa hợp lệ, cần kiểm tra lại route hoặc dữ liệu.")
+
+    st.dataframe(route_df, use_container_width=True, hide_index=True)
+    st.dataframe(check_df, use_container_width=True, hide_index=True)
 
     if method == "Proposed Hybrid Insertion":
         st.write(f"Nguồn nghiệm tốt nhất trong Proposed: {item['source']}")
@@ -506,9 +623,10 @@ with tab2:
                     f"after={cand['cost']:.4f}, improvement={cand['improvement']:.4f}"
                 )
 
-    for idx, route in enumerate(item["routes"], start=1):
-        load = route_load(route, res["demands"])
-        st.write(f"Xe {idx} | Load={load:.4f} | " + " → ".join(map(str, route)))
+    with st.expander("Xem route dạng dòng chữ"):
+        for idx, route in enumerate(item["routes"], start=1):
+            load = route_load(route, res["demands"])
+            st.write(f"Xe {idx} | Load={load:.4f} | " + " → ".join(map(str, route)))
 
 with tab3:
     st.markdown(
