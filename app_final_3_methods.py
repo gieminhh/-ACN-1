@@ -424,10 +424,8 @@ with tab1:
     avg_s = df["SAMPLING_COST"].mean()
     avg_p = df["PROPOSED_COST"].mean()
 
-    best_avg = min(
-        {"Greedy": avg_g, "Sampling": avg_s, "Proposed": avg_p},
-        key={"Greedy": avg_g, "Sampling": avg_s, "Proposed": avg_p}.get,
-    )
+    cost_dict = {"Greedy": avg_g, "Sampling": avg_s, "Proposed": avg_p}
+    best_avg = min(cost_dict, key=lambda x: cost_dict[x])
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Greedy cost TB", f"{avg_g:.4f}")
