@@ -3,7 +3,6 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from torch.utils.data import DataLoader
 
 from rl4co.envs.common.base import RL4COEnvBase
@@ -171,9 +170,11 @@ class PPO(RL4COLitModule):
                     ll, entropy = out["log_likelihood"], out["entropy"]
 
                     # Compute the ratio of probabilities of new and old actions
+                    # ratio = pi_new(a|s) / pi_old(a|s), đo policy mới khác policy cũ bao nhiêu.
                     ratio = torch.exp(ll.sum(dim=-1) - sub_td["logprobs"]).view(-1, 1)  # [batch, 1]
 
                     # Compute the advantage
+                    # advantage > 0 nghĩa là action đang xét tốt hơn baseline critic dự đoán.
                     value_pred = self.critic(sub_td)  # [batch, 1]
                     adv = previous_reward - value_pred.detach()
 
@@ -182,6 +183,7 @@ class PPO(RL4COLitModule):
                         adv = (adv - adv.mean()) / (adv.std() + 1e-8)
 
                     # Compute the surrogate loss
+                    # PPO dùng clip để policy không cập nhật quá mạnh trong một bước train.
                     surrogate_loss = -torch.min(
                         ratio * adv,
                         torch.clamp(
@@ -193,9 +195,11 @@ class PPO(RL4COLitModule):
                     ).mean()
 
                     # compute value function loss
+                    # Train critic dự đoán reward/cost tốt hơn.
                     value_loss = F.huber_loss(value_pred, previous_reward)
 
                     # compute total loss
+                    # Tổng loss = policy loss + critic loss - entropy bonus.
                     loss = (
                         surrogate_loss
                         + self.ppo_cfg["vf_lambda"] * value_loss

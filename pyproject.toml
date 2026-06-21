@@ -6,15 +6,30 @@ requires-python = ">=3.10"
 readme = "README.md"
 license = "MIT"
 dependencies = [
-    "torch",
-    "streamlit",
-    "plotly",
+    "einops",
+    "hydra-core",
+    "hydra-colorlog",
+    "lightning",
+    "matplotlib",
+    "numpy",
+    "omegaconf",
     "pandas",
+    "plotly",
+    "pyrootutils",
+    "robust-downloader",
+    "rich",
+    "scipy",
+    "streamlit",
+    "tensordict",
+    "torch",
+    "torchrl",
+    "tqdm",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "ruff",
 ]
 
 [tool.ruff]

@@ -16,11 +16,11 @@ vì thuật toán chỉ nhận thao tác làm cost giảm.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from copy import deepcopy
-from typing import List, Sequence, Tuple
 
-Coord = Tuple[float, float]
-Route = List[int]
+Coord = tuple[float, float]
+Route = list[int]
 
 
 def euclidean(coords: Sequence[Coord], a: int, b: int) -> float:
@@ -48,8 +48,8 @@ def route_load(route: Sequence[int], demands: Sequence[float]) -> float:
     return total
 
 
-def normalize_routes(routes: Sequence[Sequence[int]]) -> List[Route]:
-    normalized: List[Route] = []
+def normalize_routes(routes: Sequence[Sequence[int]]) -> list[Route]:
+    normalized: list[Route] = []
     for route in routes:
         r = [int(x) for x in route]
         if not r:
@@ -63,7 +63,7 @@ def normalize_routes(routes: Sequence[Sequence[int]]) -> List[Route]:
     return normalized
 
 
-def remove_empty_routes(routes: List[Route]) -> List[Route]:
+def remove_empty_routes(routes: list[Route]) -> list[Route]:
     return [r for r in routes if len(r) > 2]
 
 
@@ -73,6 +73,11 @@ def relocate_once(
     demands: Sequence[float],
     capacity: float,
 ):
+    """Thử cải thiện route đúng một vòng bằng thao tác relocate.
+
+    Relocate nghĩa là lấy một khách ra khỏi vị trí hiện tại, sau đó thử chèn
+    khách đó vào vị trí khác. Nếu tổng cost giảm và không vượt tải thì nhận.
+    """
     current = normalize_routes(routes)
     current_cost = solution_cost(current, coords)
 
@@ -83,6 +88,7 @@ def relocate_once(
         for src_pos in range(1, len(src_route) - 1):
             customer = int(src_route[src_pos])
 
+            # Tạm thời lấy khách ra khỏi route gốc để thử chèn lại chỗ khác.
             routes_removed = deepcopy(current)
             routes_removed[src_r_idx].pop(src_pos)
             routes_removed = remove_empty_routes(routes_removed)
@@ -98,6 +104,7 @@ def relocate_once(
                     candidate_cost = solution_cost(candidate, coords)
 
                     if candidate_cost + 1e-9 < best_cost:
+                        # Chỉ nhận nghiệm mới nếu cost thật sự giảm.
                         best_cost = candidate_cost
                         best_routes = candidate
 
@@ -121,6 +128,7 @@ def insertion_repair(
     capacity: float,
     max_iter: int = 50,
 ):
+    """Lặp relocate nhiều lần cho đến khi không cải thiện được nữa."""
     repaired = normalize_routes(routes)
     initial_cost = solution_cost(repaired, coords)
 

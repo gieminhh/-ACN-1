@@ -2,7 +2,6 @@ from dataclasses import dataclass, fields
 
 import torch
 import torch.nn as nn
-
 from einops import rearrange
 from tensordict import TensorDict
 from torch import Tensor
@@ -182,6 +181,8 @@ class AttentionModelDecoder(AutoregressiveDecoder):
         glimpse_k, glimpse_v, logit_k = self._compute_kvl(cached, td)
 
         # Compute logits
+        # logits là điểm số cho từng node ở bước hiện tại.
+        # Các decoder như greedy/sampling/beam sẽ dùng logits này để chọn node tiếp theo.
         mask = td["action_mask"]
         logits = self.pointer(glimpse_q, glimpse_k, glimpse_v, logit_k, mask)
 
@@ -206,6 +207,7 @@ class AttentionModelDecoder(AutoregressiveDecoder):
             num_starts: Number of starts for the multi-start decoding
         """
         # The projection of the node embeddings for the attention is calculated once up front
+        # Cache giúp không phải tính lại embedding cố định ở mọi bước decode.
         (
             glimpse_key_fixed,
             glimpse_val_fixed,

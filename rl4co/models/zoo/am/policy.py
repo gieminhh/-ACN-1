@@ -1,7 +1,10 @@
 from collections.abc import Callable
+from typing import Any, cast
 
 import torch.nn as nn
 
+from rl4co.models.common.constructive.autoregressive.decoder import AutoregressiveDecoder
+from rl4co.models.common.constructive.autoregressive.encoder import AutoregressiveEncoder
 from rl4co.models.common.constructive.autoregressive.policy import AutoregressivePolicy
 from rl4co.models.zoo.am.decoder import AttentionModelDecoder
 from rl4co.models.zoo.am.encoder import AttentionModelEncoder
@@ -49,23 +52,23 @@ class AttentionModelPolicy(AutoregressivePolicy):
 
     def __init__(
         self,
-        encoder: nn.Module = None,
-        decoder: nn.Module = None,
+        encoder: nn.Module | None = None,
+        decoder: nn.Module | None = None,
         embed_dim: int = 128,
         num_encoder_layers: int = 3,
         num_heads: int = 8,
         normalization: str = "batch",
         feedforward_hidden: int = 512,
         env_name: str = "tsp",
-        encoder_network: nn.Module = None,
-        init_embedding: nn.Module = None,
-        context_embedding: nn.Module = None,
-        dynamic_embedding: nn.Module = None,
+        encoder_network: nn.Module | None = None,
+        init_embedding: nn.Module | None = None,
+        context_embedding: nn.Module | None = None,
+        dynamic_embedding: nn.Module | None = None,
         use_graph_context: bool = True,
         linear_bias_decoder: bool = False,
-        sdpa_fn: Callable = None,
-        sdpa_fn_encoder: Callable = None,
-        sdpa_fn_decoder: Callable = None,
+        sdpa_fn: Callable | None = None,
+        sdpa_fn_encoder: Callable | None = None,
+        sdpa_fn_decoder: Callable | None = None,
         mask_inner: bool = True,
         out_bias_pointer_attn: bool = False,
         check_nan: bool = True,
@@ -75,10 +78,13 @@ class AttentionModelPolicy(AutoregressivePolicy):
         train_decode_type: str = "sampling",
         val_decode_type: str = "greedy",
         test_decode_type: str = "greedy",
-        moe_kwargs: dict = {"encoder": None, "decoder": None},
+        moe_kwargs: dict[str, Any] | None = None,
         **unused_kwargs,
     ):
+        if moe_kwargs is None:
+            moe_kwargs = {"encoder": None, "decoder": None}
         if encoder is None:
+            # Encoder biến tọa độ/đặc trưng node thành embedding để model hiểu bài toán.
             encoder = AttentionModelEncoder(
                 embed_dim=embed_dim,
                 num_heads=num_heads,
@@ -86,19 +92,20 @@ class AttentionModelPolicy(AutoregressivePolicy):
                 env_name=env_name,
                 normalization=normalization,
                 feedforward_hidden=feedforward_hidden,
-                net=encoder_network,
-                init_embedding=init_embedding,
+                net=cast(nn.Module, encoder_network),
+                init_embedding=cast(nn.Module, init_embedding),
                 sdpa_fn=sdpa_fn if sdpa_fn_encoder is None else sdpa_fn_encoder,
                 moe_kwargs=moe_kwargs["encoder"],
             )
 
         if decoder is None:
+            # Decoder dùng embedding + trạng thái môi trường để chọn node tiếp theo.
             decoder = AttentionModelDecoder(
                 embed_dim=embed_dim,
                 num_heads=num_heads,
                 env_name=env_name,
-                context_embedding=context_embedding,
-                dynamic_embedding=dynamic_embedding,
+                context_embedding=cast(nn.Module, context_embedding),
+                dynamic_embedding=cast(nn.Module, dynamic_embedding),
                 sdpa_fn=sdpa_fn if sdpa_fn_decoder is None else sdpa_fn_decoder,
                 mask_inner=mask_inner,
                 out_bias_pointer_attn=out_bias_pointer_attn,
@@ -107,10 +114,10 @@ class AttentionModelPolicy(AutoregressivePolicy):
                 check_nan=check_nan,
                 moe_kwargs=moe_kwargs["decoder"],
             )
-
+        # Cast to the specific Autoregressive types expected by the base class
         super().__init__(
-            encoder=encoder,
-            decoder=decoder,
+            encoder=cast(AutoregressiveEncoder, encoder),
+            decoder=cast(AutoregressiveDecoder, decoder),
             env_name=env_name,
             temperature=temperature,
             tanh_clipping=tanh_clipping,

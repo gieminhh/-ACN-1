@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Iterable, Sequence
 
 import torch
 
 from nazari_vrp.data import VRPBatch
 from nazari_vrp.model import NazariVRPModel
 from nazari_vrp.solver import DecodeResult, beam_search_decode, rollout
-
 
 Route = list[int]
 
@@ -118,6 +117,11 @@ def construct_from_decode(
     batch: VRPBatch,
     decoded: DecodeResult,
 ) -> InsertionResult:
+    """Chuyển output decoder thành lời giải bằng Best Insertion.
+
+    Decoder chỉ sinh thứ tự/action. Hàm này biến thứ tự đó thành route thật
+    bằng cách chèn từng khách vào vị trí tăng cost ít nhất.
+    """
     coords = batch.coords_with_depot().detach().cpu()
     demand = batch.demand.detach().cpu()
     capacity = batch.capacity.detach().cpu()
@@ -127,6 +131,7 @@ def construct_from_decode(
     costs: list[float] = []
 
     for idx in range(batch.batch_size):
+        # Bỏ depot 0 và node trùng để lấy thứ tự khách hàng cần chèn.
         order = actions_to_priority_order(
             decoded.actions[idx].detach().cpu().tolist(),
             batch.num_customers,
@@ -160,6 +165,8 @@ def learning_based_insertion(
     beam_width: int = 5,
 ) -> InsertionResult:
     """Use the learned policy to guide a best-insertion heuristic."""
+    # Đây là chỗ ghép học máy với heuristic:
+    # model sinh thứ tự khách hàng, heuristic Best Insertion dựng route hợp lệ.
     if decode_type == "beam":
         if batch.batch_size != 1:
             raise ValueError("beam guided insertion expects batch_size=1")

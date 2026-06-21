@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 import torch
 from torch.distributions import Categorical
@@ -32,6 +32,8 @@ def build_action_mask(
     current remaining load. The depot is feasible after leaving it, and it is
     forced when no customer can be served from the current load.
     """
+    # Mask là bộ lọc hành động: True nghĩa là node được phép chọn.
+    # Nhờ mask, model không chọn khách đã giao xong hoặc khách vượt tải xe.
     mask = torch.zeros_like(remaining, dtype=torch.bool)
     feasible_customers = (remaining[:, 1:] > 1e-6) & (
         remaining[:, 1:] <= load[:, None] + 1e-6
@@ -58,6 +60,8 @@ def rollout(
     max_steps: int | None = None,
 ) -> DecodeResult:
     """Construct CVRP routes autoregressively."""
+    # Rollout là quá trình model đi từng bước:
+    # nhìn trạng thái hiện tại -> chọn node tiếp theo -> cập nhật load/demand/cost.
     if decode_type not in {"sampling", "greedy"}:
         raise ValueError("decode_type must be 'sampling' or 'greedy'")
 
@@ -97,8 +101,10 @@ def rollout(
         distribution = Categorical(logits=logits)
 
         if decode_type == "sampling":
+            # Sampling bốc action theo phân phối xác suất để tạo nghiệm đa dạng.
             action = distribution.sample()
         else:
+            # Greedy chọn action có logits lớn nhất, tức lựa chọn tự tin nhất.
             action = logits.argmax(dim=1)
         action = torch.where(active, action, torch.zeros_like(action))
 
@@ -156,6 +162,8 @@ def beam_search_decode(
     with the shortest travel distance is returned, matching the paper's
     RL-BS evaluation idea.
     """
+    # Beam Search giữ nhiều chuỗi action ứng viên cùng lúc.
+    # Mỗi vòng mở rộng các beam hiện có, sau đó chỉ giữ beam_width chuỗi tốt nhất.
     if batch.batch_size != 1:
         raise ValueError("beam_search_decode currently expects batch_size=1")
 

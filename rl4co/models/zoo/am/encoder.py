@@ -1,5 +1,4 @@
 import torch.nn as nn
-
 from tensordict import TensorDict
 from torch import Tensor
 
@@ -78,10 +77,13 @@ class AttentionModelEncoder(AutoregressiveEncoder):
             init_h: Initial embedding of the input
         """
         # Transfer to embedding space
+        # Đưa dữ liệu thô như tọa độ/demand vào không gian vector để model xử lý.
         init_h = self.init_embedding(td)
 
         # Process embedding
+        # Graph Attention học quan hệ giữa các node trước khi decoder chọn đường đi.
         h = self.net(init_h, mask)
 
         # Return latent representation and initial embedding
+        # h dùng cho decoder; init_h giữ embedding ban đầu để tham chiếu khi cần.
         return h, init_h

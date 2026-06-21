@@ -19,10 +19,6 @@ import plotly.graph_objects as go
 import streamlit as st
 import torch
 
-from rl4co.envs import CVRPEnv
-from rl4co.models.rl.ppo import PPO
-from rl4co.models.zoo.am.policy import AttentionModelPolicy
-
 from learning_based_insertion import (
     best_insertion_construct,
     get_coords_demands_from_td,
@@ -31,7 +27,9 @@ from learning_based_insertion import (
     route_load,
     solution_cost,
 )
-
+from rl4co.envs import CVRPEnv
+from rl4co.models.rl.ppo import PPO
+from rl4co.models.zoo.am.policy import AttentionModelPolicy
 
 NUM_NODES = 20
 MAP_COUNT = 10
@@ -58,6 +56,11 @@ def find_checkpoint():
 
 @st.cache_resource
 def load_env_and_model():
+    """Nạp môi trường CVRP và model PPO + Attention cho app trung gian.
+
+    File này so sánh decoder baseline với Best Insertion, còn bản đầy đủ cuối
+    cùng nằm ở app_final_3_methods.py.
+    """
     env = CVRPEnv(generator_params=dict(num_loc=NUM_NODES))
     policy = AttentionModelPolicy(env_name=env.name)
     checkpoint_path = find_checkpoint()
@@ -156,6 +159,8 @@ def solve_learning_based_insertion(env, model, map_id, beam_width=5):
     1. PPO + Attention + Beam Search sinh thứ tự ưu tiên khách hàng.
     2. Best Insertion chèn từng khách hàng vào vị trí tăng cost nhỏ nhất.
     """
+    # Hàm này là lõi của bản app_insertion:
+    # model chỉ sinh thứ tự khách, còn Best Insertion mới dựng route cuối cùng.
     seed = 42 + int(map_id)
     td = generate_td(env, seed)
     coords, demands = get_coords_demands_from_td(td)
@@ -196,6 +201,7 @@ def solve_learning_based_insertion(env, model, map_id, beam_width=5):
 
 
 def run_all_maps(env, model, beam_width=5, sampling_samples=50, temperature=0.8):
+    """Chạy toàn bộ MAP và gom kết quả thành bảng so sánh."""
     rows = []
     detail = {}
     progress = st.progress(0)

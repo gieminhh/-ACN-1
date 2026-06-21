@@ -20,14 +20,20 @@ class NazariVRPModel(nn.Module):
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
 
+        # static_embed học biểu diễn cho tọa độ cố định của depot/khách hàng.
         self.static_embed = nn.Linear(2, embed_dim)
+        # dynamic_embed học biểu diễn cho phần thay đổi theo từng bước:
+        # demand còn lại và tải còn lại của xe.
         self.dynamic_embed = nn.Linear(2, embed_dim)
+        # GRU giữ "trí nhớ" của decoder: bước trước đã đi đâu, trạng thái hiện tại ra sao.
         self.decoder = nn.GRUCell(embed_dim, hidden_dim)
 
+        # Ba lớp dưới đây tạo attention score để chấm điểm node tiếp theo.
         self.attn_query = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.attn_key = nn.Linear(embed_dim, hidden_dim, bias=False)
         self.attn_score = nn.Linear(hidden_dim, 1, bias=False)
 
+        # Critic ước lượng giá trị baseline, dùng khi train để giảm nhiễu gradient.
         self.critic = nn.Sequential(
             nn.Linear(embed_dim, hidden_dim),
             nn.ReLU(),
@@ -48,6 +54,7 @@ class NazariVRPModel(nn.Module):
         load: torch.Tensor,
         capacity: torch.Tensor,
     ) -> torch.Tensor:
+        # Chuẩn hóa demand/load theo capacity để model học ổn định hơn.
         safe_capacity = capacity[:, None].clamp_min(1e-6)
         demand_ratio = remaining / safe_capacity
         load_ratio = load[:, None].expand_as(remaining) / safe_capacity
@@ -64,6 +71,8 @@ class NazariVRPModel(nn.Module):
         action_mask: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Return masked logits for the next destination."""
+        # Mỗi bước decoder tạo logits cho tất cả node, node nào logits cao
+        # thì càng có khả năng được chọn làm điểm đến tiếp theo.
         batch_size, _, embed_dim = static_emb.shape
         gather_index = current_node.view(batch_size, 1, 1).expand(-1, 1, embed_dim)
         decoder_input = static_emb.gather(1, gather_index).squeeze(1)
@@ -74,6 +83,7 @@ class NazariVRPModel(nn.Module):
         query = self.attn_query(hidden).unsqueeze(1)
         energy = torch.tanh(query + self.attn_key(keys))
         logits = self.attn_score(energy).squeeze(-1)
+        # Node không khả thi bị gán điểm rất thấp để decoder không chọn.
         logits = logits.masked_fill(~action_mask, -1e9)
         return logits, hidden
 

@@ -1,3 +1,10 @@
+"""Vẽ biểu đồ minh họa loss/reward cho báo cáo.
+
+Lưu ý: file này tạo dữ liệu giả lập bằng công thức và nhiễu ngẫu nhiên,
+không phải log train thật từ model. Log/checkpoint thật nằm ở các file .ckpt
+và cấu hình hparams trong cùng thư mục.
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -21,7 +28,7 @@ ax1.plot(epochs, loss, color=color, alpha=0.8, linewidth=2)
 ax1.tick_params(axis='y', labelcolor=color)
 
 # vẽ đường Reward (màu xanh)
-ax2 = ax1.twinx()  
+ax2 = ax1.twinx()
 color = 'tab:blue'
 ax2.set_ylabel('Training Reward', color=color, fontweight='bold')
 ax2.plot(epochs, reward, color=color, alpha=0.8, linewidth=2)

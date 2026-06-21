@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 import torch
 
-
 CAPACITIES_BY_SIZE = {
     10: 20.0,
     20: 30.0,
@@ -33,6 +32,8 @@ class VRPConfig:
 
     @property
     def capacity(self) -> float:
+        # Nếu người dùng không truyền capacity riêng, dùng lịch capacity chuẩn
+        # theo số khách hàng trong bài Nazari et al.
         if self.vehicle_capacity is not None:
             return float(self.vehicle_capacity)
         return capacity_for_size(self.num_customers)
@@ -47,7 +48,7 @@ class VRPBatch:
     demand: torch.Tensor
     capacity: torch.Tensor
 
-    def to(self, device: torch.device | str) -> "VRPBatch":
+    def to(self, device: torch.device | str) -> VRPBatch:
         return VRPBatch(
             depot=self.depot.to(device),
             locs=self.locs.to(device),
@@ -88,6 +89,9 @@ def generate_batch(
     coordinates are sampled uniformly from [0, 1]^2 and customer demands are
     integers in [1, 9].
     """
+    # Hàm này tạo dữ liệu đầu vào cho model:
+    # depot là kho, locs là tọa độ khách hàng, demand là nhu cầu từng khách,
+    # capacity là tải trọng tối đa của xe.
     generator = None
     if seed is not None:
         generator = torch.Generator()

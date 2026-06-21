@@ -40,6 +40,11 @@ def save_checkpoint(path: str | Path, model: NazariVRPModel, config: VRPConfig) 
 
 
 def train(args: argparse.Namespace) -> None:
+    """Train model Nazari custom.
+
+    File app chỉ load checkpoint để chạy kết quả. Hàm này mới là nơi model
+    học từ dữ liệu sinh ngẫu nhiên bằng reward/cost.
+    """
     device = torch.device(args.device)
     config = VRPConfig(
         num_customers=args.num_customers,
@@ -55,9 +60,13 @@ def train(args: argparse.Namespace) -> None:
         else:
             result = rollout(model, batch, decode_type="sampling")
 
+        # advantage đo xem reward thực tế tốt hơn baseline critic bao nhiêu.
         advantage = result.reward - result.value.detach()
+        # actor_loss khuyến khích model lặp lại các action cho reward tốt.
         actor_loss = -(advantage * result.log_likelihood).mean()
+        # critic_loss train critic dự đoán reward chính xác hơn.
         critic_loss = F.mse_loss(result.value, result.reward.detach())
+        # entropy giúp model không quá bảo thủ khi khám phá nghiệm.
         entropy_bonus = result.entropy.mean()
         loss = actor_loss + args.critic_coef * critic_loss - args.entropy_coef * entropy_bonus
 

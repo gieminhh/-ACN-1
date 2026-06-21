@@ -16,7 +16,6 @@ from nazari_vrp import (
 )
 from nazari_vrp.train import load_checkpoint
 
-
 CHECKPOINT_PATH = Path("nazari_vrp_checkpoint.pt")
 
 st.set_page_config(page_title="Learning-based Insertion for CVRP", layout="wide")
@@ -24,6 +23,11 @@ st.set_page_config(page_title="Learning-based Insertion for CVRP", layout="wide"
 
 @st.cache_resource
 def get_model(checkpoint_mtime: float | None) -> tuple[NazariVRPModel, str]:
+    """Nạp model Nazari custom.
+
+    Nếu có checkpoint thì dùng model đã train. Nếu không có checkpoint thì app
+    vẫn chạy bằng model chưa train để minh họa luồng thuật toán.
+    """
     if CHECKPOINT_PATH.exists():
         model = load_checkpoint(CHECKPOINT_PATH, device="cpu")
         model.eval()
@@ -136,6 +140,7 @@ def actions_from_routes(routes: list[list[int]]) -> list[int]:
 
 
 def solve_one_map(model, config: VRPConfig, map_seed: int, decode_type: str, beam_width: int):
+    """Giải một bản đồ CVRP bằng learning-based insertion custom."""
     batch = generate_batch(1, config, seed=int(map_seed))
     with torch.no_grad():
         result = learning_based_insertion(
@@ -173,6 +178,7 @@ def run_many_maps(
     num_maps: int,
     beam_width: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Chạy nhiều MAP để tạo bảng so sánh Greedy-guided và Beam-guided."""
     result_rows: list[dict[str, object]] = []
     dataset_tables: list[pd.DataFrame] = []
 

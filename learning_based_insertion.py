@@ -16,13 +16,12 @@ Module bổ sung để đề tài đúng hơn với tên:
 from __future__ import annotations
 
 import math
-from typing import Dict, Iterable, List, Sequence, Tuple
+from collections.abc import Iterable, Sequence
 
 import torch
 
-
-Coord = Tuple[float, float]
-Route = List[int]
+Coord = tuple[float, float]
+Route = list[int]
 
 
 def euclidean(coords: Sequence[Coord], a: int, b: int) -> float:
@@ -58,16 +57,20 @@ def insertion_delta(coords: Sequence[Coord], a: int, j: int, b: int) -> float:
     Chi phí tăng thêm khi chèn khách hàng j vào giữa a và b.
 
     Delta(a,j,b) = c(a,j) + c(j,b) - c(a,b)
+
+    Ví dụ route đang có đoạn a -> b. Nếu chèn thêm khách j vào giữa,
+    đoạn đó đổi thành a -> j -> b. Delta chính là phần đường đi tăng thêm.
+    Delta càng nhỏ thì vị trí chèn càng tốt.
     """
     return euclidean(coords, a, j) + euclidean(coords, j, b) - euclidean(coords, a, b)
 
 
-def actions_to_customer_order(actions: Iterable[int], num_customers: int) -> List[int]:
+def actions_to_customer_order(actions: Iterable[int], num_customers: int) -> list[int]:
     """
     Chuyển chuỗi actions của mô hình thành thứ tự ưu tiên khách hàng.
     Bỏ depot 0 và bỏ node trùng.
     """
-    order: List[int] = []
+    order: list[int] = []
     seen = set()
 
     for action in actions:
@@ -92,7 +95,7 @@ def best_insertion_construct(
     coords: Sequence[Coord],
     demands: Sequence[float],
     capacity: float = 1.0,
-) -> List[Route]:
+) -> list[Route]:
     """
     Xây dựng lời giải CVRP bằng Best Insertion.
 
@@ -104,9 +107,11 @@ def best_insertion_construct(
     Lưu ý:
     - Nếu chưa có route nào hoặc không route nào còn đủ tải, mở route mới [0, j, 0].
     """
-    routes: List[Route] = []
+    routes: list[Route] = []
 
     for customer in customer_order:
+        # Lấy nhu cầu của khách đang xét. Nếu thêm khách này làm route quá tải
+        # thì route đó không được phép nhận khách.
         demand_j = float(demands[customer]) if customer < len(demands) else 0.0
 
         best_route_idx = None
@@ -125,6 +130,7 @@ def best_insertion_construct(
                 b = route[pos]
                 delta = insertion_delta(coords, a, customer, b)
                 if delta < best_delta:
+                    # Ghi nhớ vị trí làm tổng quãng đường tăng ít nhất.
                     best_delta = delta
                     best_route_idx = r_idx
                     best_pos = pos
@@ -133,6 +139,7 @@ def best_insertion_construct(
             # Không có vị trí khả thi trong route cũ -> mở route mới.
             routes.append([0, int(customer), 0])
         else:
+            # Chèn khách vào vị trí tốt nhất đã tìm được.
             routes[best_route_idx].insert(best_pos, int(customer))
 
     return routes
@@ -186,12 +193,14 @@ def get_coords_demands_from_td(td):
     return coords, demands
 
 
-def model_actions_to_priority_order(model, td, num_customers: int, beam_width: int = 5) -> List[int]:
+def model_actions_to_priority_order(model, td, num_customers: int, beam_width: int = 5) -> list[int]:
     """
     Dùng mô hình PPO + Attention để sinh thứ tự ưu tiên khách hàng.
     Ở đây dùng beam_search để lấy chuỗi hành động có chất lượng tốt hơn greedy.
     """
     with torch.no_grad():
         out = model(td.clone(), decode_type="beam_search", beam_width=beam_width)
+    # Output của model là chuỗi action có cả depot 0. Ta bỏ depot và node trùng
+    # để lấy danh sách khách hàng theo thứ tự ưu tiên.
     actions = out["actions"][0].detach().cpu().numpy().tolist()
     return actions_to_customer_order(actions, num_customers=num_customers)
